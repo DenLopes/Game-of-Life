@@ -6,9 +6,9 @@ import Pixel from "../components/Pixel.vue"
     <div class="flex justify-center">
         <div class="flex flex-col justify-center h-screen">
             <div class="flex justify-between ">
-                <button @click="randomGrid()" class="h-12 w-24 bg-red-400">RANDOM</button>
-                <button @click="createGrid()" class="h-12 w-24 bg-yellow-400">CLEAR</button>
-                <button @click="play_Pause()" class="h-12 w-24 bg-green-400">{{ state }}</button>
+                <button @click="randomGrid()" class="h-12 w-24 mb-2 rounded-md hover:scale-105 bg-red-400">RANDOM</button>
+                <button @click="createGrid()" class="h-12 w-24 mb-2 rounded-md hover:scale-105 bg-yellow-400">CLEAR</button>
+                <button @click="play_Pause()" class="h-12 w-24 mb-2 rounded-md hover:scale-105 bg-green-400">{{ state }}</button>
             </div>
             <div class="flex w-fit h-fit"> 
                 <div id="col" class="grid">
@@ -27,8 +27,8 @@ import Pixel from "../components/Pixel.vue"
 export default {
     data() {
         return {
-            col: 39,
-            row: 39,
+            col: 49,
+            row: 44,
             grid: [],
             state: 'PLAY',
         }
@@ -58,7 +58,7 @@ export default {
             for (let i = 0; i <= this.col; i++) {
                 this.grid[i] = []
                 for (let j = 0; j <= this.row; j++) {
-                    if (Math.random() < 0.4){
+                    if (Math.random() < 0.65){
                         this.grid[i][j] = false
                     }else{this.grid[i][j] = true}
                 }
@@ -105,5 +105,5 @@ export default {
 </script>
 
 <style scoped> 
-    #col {grid-template-columns: repeat( 40, minmax(0, 1fr))}
+    #col {grid-template-columns: repeat( 50, minmax(0, 1fr))}
 </style>
