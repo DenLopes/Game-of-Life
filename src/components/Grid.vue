@@ -2,22 +2,11 @@
 import Pixel from "../components/Pixel.vue"
 </script>
 
-<template>
-    <div class="flex justify-center">
-        <div class="flex flex-col justify-center h-screen">
-            <div class="flex justify-between ">
-                <button @click="randomGrid()" class="h-12 w-24 mb-2 rounded-md hover:scale-105 bg-red-400">RANDOM</button>
-                <button @click="createGrid()" class="h-12 w-24 mb-2 rounded-md hover:scale-105 bg-yellow-400">CLEAR</button>
-                <button @click="play_Pause()" class="h-12 w-24 mb-2 rounded-md hover:scale-105 bg-green-400">{{ state }}</button>
-            </div>
-            <div class="flex w-fit h-fit"> 
-                <div id="col" class="grid">
-                    <div v-for="(col, x_index) in grid" :key="x_index" class="grid">
-                        <div v-for="(row, y_index) in col" :key="y_index" class="grid">
-                            <Pixel @flipArray="changeGrid" :alive="row" :x="x_index" :y="y_index"/>
-                        </div>
-                    </div>
-                </div>
+<template> 
+    <div id="col" class="grid">
+        <div v-for="(col, x_index) in grid" :key="x_index" class="grid">
+            <div v-for="(row, y_index) in col" :key="y_index" class="grid">
+                <Pixel @flipArray="changeGrid" :alive="row" :x="x_index" :y="y_index"/>
             </div>
         </div>
     </div>
@@ -30,19 +19,9 @@ export default {
             col: 49,
             row: 44,
             grid: [],
-            state: 'PLAY',
         }
     },
     methods: {
-        play_Pause() {
-            if(this.state === 'PLAY'){
-                this.state = 'PAUSE'
-                return this.interval = setInterval(() => this.applyRulesGrid(), 32)
-            }else{
-                this.state = 'PLAY'
-                return clearInterval(this.interval)
-            }
-        },
         createGrid() {
             for (let i = 0; i <= this.col; i++) {
                 this.grid[i] = []
@@ -96,10 +75,18 @@ export default {
                 }
             }
             this.grid = aux
-        }
+        },
+        emitInterface() {
+            this.$emit("interface", {
+                createGrid: () => this.createGrid(),
+                randomGrid: () => this.randomGrid(),
+                applyRules: () => this.applyRulesGrid(),
+            })
+        },
     },   
     mounted() {
         this.createGrid();
+        this.emitInterface();
     }
 }
 </script>
