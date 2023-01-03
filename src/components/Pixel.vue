@@ -9,5 +9,5 @@ export default {
 </script>
 
 <template>
-    <button @click="$emit('flipArray', x, y)" class="w-5 h-5 border-solid border-black border" :class="[alive ? 'bg-black' : 'bg-white']"></button>
+    <button @click="$emit('flipArray', x, y)" class="w-3.5 h-3.5 border-solid border-black border" :class="[alive ? 'bg-black' : 'bg-white']"></button>
 </template>
