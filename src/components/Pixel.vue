@@ -4,10 +4,16 @@ export default {
         alive: Boolean,
         x: Number,
         y: Number,
-    }
+        pSize: Number,
+    },
 }
 </script>
 
 <template>
-    <button @click="$emit('flipArray', x, y)" class="w-3.5 h-3.5 border-solid border-black border" :class="[alive ? 'bg-black' : 'bg-white']"></button>
+    <button 
+    @click="$emit('flipArray', x, y)" 
+    class="border-solid border-black border" 
+    :class="[alive ? 'bg-black' : '' ]"
+    :style="{ 'width': pSize+'px', 'height': pSize+'px' }"
+    ></button>
 </template>

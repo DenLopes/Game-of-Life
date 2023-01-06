@@ -3,44 +3,76 @@ import Grid from './components/Grid.vue'
 </script>
 
 <template>
-  <div class="flex justify-center">
-        <div class="flex flex-col justify-center h-screen">
-            <div class="flex justify-between ">
-                <button @click="randomGrid()" class="h-12 w-24 mb-2 rounded-md hover:scale-105 bg-red-400">RANDOM</button>
-                <button @click="createGrid()" class="h-12 w-24 mb-2 rounded-md hover:scale-105 bg-yellow-400">CLEAR</button>
-                <button @click="play_Pause()" class="h-12 w-24 mb-2 rounded-md hover:scale-105 bg-green-400">{{ state }}</button>
-            </div>
-            <Grid @interface="getChildInterface"></Grid>
-        </div>
-  </div>      
+	<div class="flex justify-center bg-gray-300">
+		<div class="flex justify-around w-screen m-2">
+			<button @click="randomGrid()" class="h-fit w-fit p-2 font-bold mb-2 rounded-md hover:scale-105 bg-red-400">RANDOM</button>
+			<button @click="createGrid()" class="h-fit w-fit p-2 font-bold mb-2 rounded-md hover:scale-105 bg-yellow-400">CLEAR</button>
+			<button @click="play_Pause()" class="h-fit w-fit p-2 font-bold mb-2 rounded-md hover:scale-105 bg-green-400">{{ state }}</button>
+			<div class="flex">
+				<p>COLUMNS:</p>
+				<button @click="more_Columns()" class="font-bold h-fit w-fit p-2 mb-2 mx-1 rounded-md hover:scale-105 bg-blue-400">+</button>
+				<button @click="less_Columns()" class="font-bold h-fit w-fit p-2 mb-2 rounded-md hover:scale-105 bg-blue-400">-</button>
+			</div>
+			<div class="flex">
+				<p>ROWNS:</p>
+				<button @click="more_Rows()" class="font-bold h-fit w-fit p-2 mb-2 mx-1 rounded-md hover:scale-105 bg-blue-400">+</button>
+				<button @click="less_Rows()" class="font-bold h-fit w-fit p-2 mb-2 rounded-md hover:scale-105 bg-blue-400">-</button>
+			</div>
+			<div class="flex">
+				<p>TILES SIZE:</p>
+				<button @click="size_Up()" class="font-bold h-fit w-fit p-2 mb-2 mx-1 rounded-md hover:scale-105 bg-blue-400">+</button>
+				<button @click="size_Down()" class="font-bold h-fit w-fit p-2 mb-2 rounded-md hover:scale-105 bg-blue-400">-</button>
+			</div>
+		</div>
+	</div>
+	<div class="flex justify-center">
+		<Grid @interface="getChildInterface" :pSize="pixelSize"></Grid>
+	</div>      
 </template>
 
 <script>
-  export default {
+export default {
     data() {
-      return{
-        state: 'PLAY',
-      }
+    	return{
+    		state: 'PLAY',
+			pixelSize: 18,
+    	}
     },
     childInterface: {
-      createGrid: () => {},
-      randomGrid: () => {},
-      applyRules: () => {},
+    	createGrid: () => {},
+    	randomGrid: () => {},
+    	applyRules: () => {},
+		more_Columns: () => {},
+		less_Columns: () => {},
+		more_Rows: () => {},
+		less_Rows: () => {},
     },
     methods: {
-      getChildInterface(childInterface) {
-        this.$options.childInterface = childInterface
-      },
-      createGrid(){
-        this.$options.childInterface.createGrid()
-      },
-      randomGrid(){
-        this.$options.childInterface.randomGrid()
-      },
-      applyRules(){
-        this.$options.childInterface.applyRules()
-      },
-      play_Pause() {
+    	getChildInterface(childInterface) {
+    		this.$options.childInterface = childInterface
+    	},
+    	createGrid(){
+    		this.$options.childInterface.createGrid()
+    	},
+      	randomGrid(){
+        	this.$options.childInterface.randomGrid()
+      	},
+      	applyRules(){
+        	this.$options.childInterface.applyRules()
+      	},
+		more_Columns(){
+			this.$options.childInterface.more_Columns()
+		},
+		less_Columns(){
+			this.$options.childInterface.less_Columns()
+		},
+		more_Rows(){
+			this.$options.childInterface.more_Rows()
+		},
+		less_Rows(){
+			this.$options.childInterface.less_Rows()
+		},
+      	play_Pause() {
             if(this.state === 'PLAY'){
                 this.state = 'PAUSE'
                 return this.interval = setInterval(() => this.applyRules(), 32)
@@ -48,8 +80,15 @@ import Grid from './components/Grid.vue'
                 this.state = 'PLAY'
                 return clearInterval(this.interval)
             }
-        },
-    }
-  }
+      	},
+		size_Up() {
+        	this.pixelSize++  
+      	},
+      	size_Down() {
+        	this.pixelSize--
+      	},
+        
+    },
+}
 </script>
 
