@@ -121,7 +121,3 @@ export default {
     }
 }
 </script>
-
-<style scoped> 
-    #col {grid-template-columns: repeat( 13, minmax(0, 1fr))}
-</style>
