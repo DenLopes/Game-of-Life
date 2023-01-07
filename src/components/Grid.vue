@@ -130,8 +130,8 @@ export default {
         },
         gridSizeCell() {
 			if(window.screen.availWidth < 500) {
-				this.col = 20
-                this.row = 44
+				this.col = 24
+                this.row = 46
                 this.updateGrid()
 			}else{
                 this.col = 49

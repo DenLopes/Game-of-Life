@@ -5,21 +5,23 @@ import Grid from './components/Grid.vue'
 <template>
 	<div class="flex md:justify-center w-screen mb-1">
 		<div class="flex md:flex-row flex-col justify-around w-full m-2">
-			<button @click="randomGrid()" class="h-fit w-fit p-2 font-bold mb-2 rounded-md hover:scale-105 bg-red-400">RANDOM</button>
-			<button @click="createGrid()" class="h-fit w-fit p-2 font-bold mb-2 rounded-md hover:scale-105 bg-yellow-400">CLEAR</button>
-			<button @click="play_Pause()" class="h-fit w-fit p-2 font-bold mb-2 rounded-md hover:scale-105 bg-green-400">{{ state }}</button>
-			<div class="flex">
-				<div class="flex md:flex-row flex-col">
+			<div class="flex justify-center">
+				<button @click="randomGrid()" class="h-fit w-fit p-2 font-bold mb-2 rounded-md hover:scale-105 bg-red-400">RANDOM</button>
+				<button @click="createGrid()" class="h-fit w-fit p-2 font-bold mb-2 mx-8 rounded-md hover:scale-105 bg-yellow-400">CLEAR</button>
+				<button @click="play_Pause()" class="h-fit w-fit p-2 font-bold mb-2 rounded-md hover:scale-105 bg-green-400">{{ state }}</button>
+			</div>
+			<div class="flex justify-center">
+				<div class="flex md:flex-row">
 					<p>COLUMNS:</p>
 					<button @click="more_Columns()" class="font-bold h-fit w-fit p-2 mb-2 mx-1 rounded-md hover:scale-105 bg-blue-400">+</button>
 					<button @click="less_Columns()" class="font-bold h-fit w-fit p-2 mb-2 rounded-md hover:scale-105 bg-blue-400">-</button>
 				</div>
-				<div class="flex md:flex-row flex-col">
+				<div class="flex md:flex-row">
 					<p>ROWNS:</p>
 					<button @click="more_Rows()" class="font-bold h-fit w-fit p-2 mb-2 mx-1 rounded-md hover:scale-105 bg-blue-400">+</button>
 					<button @click="less_Rows()" class="font-bold h-fit w-fit p-2 mb-2 rounded-md hover:scale-105 bg-blue-400">-</button>
 				</div>
-				<div class="flex md:flex-row flex-col">
+				<div class="flex md:flex-row">
 					<p>TILES SIZE:</p>
 					<button @click="size_Up()" class="font-bold h-fit w-fit p-2 mb-2 mx-1 rounded-md hover:scale-105 bg-blue-400">+</button>
 					<button @click="size_Down()" class="font-bold h-fit w-fit p-2 mb-2 rounded-md hover:scale-105 bg-blue-400">-</button>
