@@ -79,7 +79,7 @@ export default {
       	play_Pause() {
             if(this.state === 'PLAY'){
                 this.state = 'PAUSE'
-                return this.interval = setInterval(() => this.applyRules(), 32)
+                return this.interval = setInterval(() => this.applyRules(), 10)
             }else{
                 this.state = 'PLAY'
                 return clearInterval(this.interval)
