@@ -3,9 +3,9 @@ import Pixel from "../components/Pixel.vue"
 </script>
 
 <template> 
-    <div :style="{ 'grid-template-columns': 'repeat( '+(col+1)+', minmax(0, 1fr))'}" class="grid">
-        <div v-for="(col, x_index) in grid" :key="x_index" class="grid">
-            <div v-for="(state, y_index) in col" :key="y_index" class="grid">
+    <div :style="{ 'grid-template-columns': 'repeat( '+(col+1)+', minmax(0, 1fr))'}" class="grid shadow-2xl w-fit">
+        <div v-for="(col, x_index) in grid" :key="x_index" class="grid w-fit">
+            <div v-for="(state, y_index) in col" :key="y_index" class="grid w-fit">
                 <Pixel @flipArray="changeGrid" :alive="state" :x="x_index" :y="y_index" :pSize="pSize"/>
             </div>
         </div>
@@ -19,8 +19,8 @@ export default {
     },
     data() {
         return {
-            col: 60,
-            row: 35,
+            col: 49,
+            row: 31,
             grid: [],
         }
     },
@@ -79,28 +79,42 @@ export default {
             }
             this.grid = aux;
         },
+        updateGrid() {
+            let aux = [];
+            for (let i = 0; i <= this.col; ++i) {
+                aux[i] = [];
+                for (let j = 0; j <= this.row; ++j) {
+                    aux[i][j] = this.grid[i][j]
+                }
+            }
+            this.grid = aux;
+        },
         more_Columns() {
             this.col++
-            this.createGrid();
+            this.grid[this.col] = []
+            for (let i = 0; i <= this.row; ++i) {
+                this.grid[this.col][i] = false
+            }
+            this.updateGrid();
         },
         less_Columns() {
             if(this.col <= 3){
                 this.col = 3
             }else{
                 this.col--
-                this.createGrid();
+                this.updateGrid();
             }
         },
         more_Rows() {
             this.row++
-            this.createGrid();
+            this.updateGrid();
         },
         less_Rows() {
             if(this.row <= 3){
                 this.row = 3
             }else{
                 this.row--
-                this.createGrid();
+                this.updateGrid();
             }
         },
         emitInterface() {
@@ -114,10 +128,23 @@ export default {
                 less_Rows: () => this.less_Rows(),
             })
         },
+        gridSizeCell() {
+			if(window.screen.availWidth < 500) {
+				this.col = 20
+                this.row = 44
+                this.updateGrid()
+			}else{
+                this.col = 49
+                this.row = 31
+                this.updateGrid()
+            }
+		},
     },   
     mounted() {
-        this.createGrid();
         this.emitInterface();
+        this.createGrid();
+        this.gridSizeCell();
+
     }
 }
 </script>
