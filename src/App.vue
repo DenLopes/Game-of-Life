@@ -4,27 +4,40 @@ import Grid from './components/Grid.vue'
 
 <template>
 	<div class="flex md:justify-center w-screen mb-1">
-		<div class="flex md:flex-row flex-col justify-around w-full m-2">
-			<div class="flex justify-center">
-				<button @click="randomGrid()" class="h-fit w-fit p-2 font-bold mb-2 rounded-md hover:scale-105 bg-red-400">RANDOM</button>
-				<button @click="createGrid()" class="h-fit w-fit p-2 font-bold mb-2 mx-8 rounded-md hover:scale-105 bg-yellow-400">CLEAR</button>
-				<button @click="play_Pause()" class="h-fit w-fit p-2 font-bold mb-2 rounded-md hover:scale-105 bg-green-400">{{ state }}</button>
+		<div class="flex md:flex-row md:justify-around flex-col w-full m-2">
+			<div class="flex self-center w-fit rounded-md bg-red-400">
+				<button @click="randomGrid()" class="h-10 w-fit p-2 font-bold">RANDOM</button>
+				<button @click="createGrid()" class="h-10 w-fit p-2 px-4 font-bold bg-yellow-400">CLEAR</button>
+				<button @click="play_Pause()" class="h-10 w-fit p-2 px-4 font-bold  rounded-r-md bg-green-400">{{ state }}</button>
 			</div>
 			<div class="flex justify-center">
-				<div class="flex md:flex-row">
-					<p>COLUMNS:</p>
-					<button @click="more_Columns()" class="font-bold h-fit w-fit p-2 mb-2 mx-1 rounded-md hover:scale-105 bg-blue-400">+</button>
-					<button @click="less_Columns()" class="font-bold h-fit w-fit p-2 mb-2 rounded-md hover:scale-105 bg-blue-400">-</button>
+				<div class="flex md:flex-row flex-col">
+					<p class="flex items-center mr-1 font-bold">COLUMNS:</p>
+					<div class="rounded-md h-fit bg-blue-400 mr-2">
+						<button @click="more_Columns()" class="font-extrabold h-8 w-10 m-auto">+</button>
+						<button @click="less_Columns()" class="font-extrabold h-8 w-10 m-auto border-l-2 border-black">-</button>
+					</div>
 				</div>
-				<div class="flex md:flex-row">
-					<p>ROWNS:</p>
-					<button @click="more_Rows()" class="font-bold h-fit w-fit p-2 mb-2 mx-1 rounded-md hover:scale-105 bg-blue-400">+</button>
-					<button @click="less_Rows()" class="font-bold h-fit w-fit p-2 mb-2 rounded-md hover:scale-105 bg-blue-400">-</button>
+				<div class="flex md:flex-row flex-col">
+					<p class="flex items-center mr-1 font-bold">ROWNS:</p>
+					<div class="rounded-md h-fit bg-blue-400 mr-2">
+						<button @click="more_Rows()" class="font-extrabold h-8 w-10 m-auto">+</button>
+						<button @click="less_Rows()" class="font-extrabold h-8 w-10 m-auto border-l-2 border-black">-</button>
+					</div>
 				</div>
-				<div class="flex md:flex-row">
-					<p>TILES SIZE:</p>
-					<button @click="size_Up()" class="font-bold h-fit w-fit p-2 mb-2 mx-1 rounded-md hover:scale-105 bg-blue-400">+</button>
-					<button @click="size_Down()" class="font-bold h-fit w-fit p-2 mb-2 rounded-md hover:scale-105 bg-blue-400">-</button>
+				<div class="flex md:flex-row flex-col">
+					<p class="flex items-center mr-1 font-bold">TILES SIZE:</p>
+					<div class="rounded-md h-fit bg-blue-400 mr-2">
+						<button @click="size_Up()" class="font-extrabold h-8 w-10 m-auto">+</button>
+						<button @click="size_Down()" class="font-extrabold h-8 w-10 m-auto border-l-2 border-black">-</button>
+					</div>
+				</div>
+				<div class="flex md:flex-row flex-col">
+					<p class="flex items-center mr-1 font-bold">SPEED:</p>
+					<div class="rounded-md h-fit bg-blue-400 mr-2">
+						<button @click="faster()" class="font-extrabold h-8 w-10 m-auto">+</button>
+						<button @click="slower()" class="font-extrabold h-8 w-10 m-auto border-l-2 border-black">-</button>
+					</div>
 				</div>
 			</div>
 		</div>
@@ -40,6 +53,7 @@ export default {
     	return{
     		state: 'PLAY',
 			pixelSize: 18,
+			speed: 260,
     	}
     },
     childInterface: {
@@ -79,7 +93,7 @@ export default {
       	play_Pause() {
             if(this.state === 'PLAY'){
                 this.state = 'PAUSE'
-                return this.interval = setInterval(() => this.applyRules(), 10)
+                return this.interval = setInterval(() => this.applyRules(), this.speed)
             }else{
                 this.state = 'PLAY'
                 return clearInterval(this.interval)
@@ -96,7 +110,30 @@ export default {
 				this.pixelSize = 10
 			}
 		},
-        
+		faster() {
+			if(this.speed <= 10) {
+				this.speed = 10
+			}else{
+				this.speed -= 50
+				console.log(this.speed+'ms')
+				if(this.state === 'PAUSE') {
+					clearInterval(this.interval)
+					return this.interval = setInterval(() => this.applyRules(), this.speed)
+				}
+			}
+		},
+		slower() {
+			if(this.speed >= 1510) {
+				this.speed = 1510
+			}else{
+				this.speed += 50
+				console.log(this.speed+'ms')
+				if(this.state === 'PAUSE') {
+					clearInterval(this.interval)
+					return this.interval = setInterval(() => this.applyRules(), this.speed)
+				}
+			}
+		},
     },
 	mounted() {
 		this.pixelSizeCell()
