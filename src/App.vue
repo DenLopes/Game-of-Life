@@ -4,8 +4,8 @@ import Grid from './components/Grid.vue'
 
 <template>
 	<div class="flex md:justify-center w-screen mb-1">
-		<div class="flex md:flex-row md:justify-around flex-col w-full m-2">
-			<div class="flex self-center w-fit rounded-md bg-red-400">
+		<div class="flex lg:flex-row md:justify-around flex-col w-full m-2">
+			<div class="flex self-center w-fit rounded-md bg-red-400 mb-1 lg:m-0">
 				<button @click="randomGrid()" class="h-10 w-fit p-2 font-bold">RANDOM</button>
 				<button @click="createGrid()" class="h-10 w-fit p-2 px-4 font-bold bg-yellow-400">CLEAR</button>
 				<button @click="play_Pause()" class="h-10 w-fit p-2 px-4 font-bold  rounded-r-md bg-green-400">{{ state }}</button>
