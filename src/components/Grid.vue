@@ -1,170 +1,174 @@
 <template>
-	<div class="flex justify-center items-center w-full h-full">
-		<canvas ref="canvasRef" class="border-solid border-black border" @click="changeGrid" :width="(gridCol * pSize)"
-			:height="(gridRow * pSize)"></canvas>
-	</div>
+  <div class="flex justify-center items-center w-full h-full">
+    <canvas
+      ref="canvasRef"
+      @click="changeGrid"
+      :width="(columns + 1) * pixelSize"
+      :height="(rows + 1) * pixelSize"
+    ></canvas>
+  </div>
 </template>
 
 <script setup>
-import { ref, onMounted } from "vue"
+import { ref, onMounted } from 'vue'
 
 const props = defineProps({
-	pSize: Number,
+  pixelSize: Number,
+  running: Boolean,
+  simulationSpeed: Number,
+  columns: Number,
+  rows: Number
 })
 
-const running = defineModel()
-
-const gridCol = ref(420)
-const gridRow = ref(400)
+//reactive values
 const ctx = ref()
 const canvasRef = ref()
 
-let pixelTobeFlipped = []
-let grid = Array.from({ length: gridCol.value + 1 }, () =>
-	Array.from({ length: gridRow.value + 1 }, () => ({ current: false, next: false }))
-);
-let cellsTobeDrawn = Array.from({ length: gridCol.value * gridRow.value }, () => ({ x: 0, y: 0, alive: false }))
+// variables
+let cellsToBeFlipped = []
+let grid = Array.from({ length: props.columns + 1 }, () =>
+  Array.from({ length: props.rows + 1 }, () => ({ current: false, next: false }))
+)
+let cellsTobeDrawn = Array.from({ length: props.columns * props.rows }, () => ({
+  x: 0,
+  y: 0,
+  alive: false
+}))
 
-
-const changeGrid = (x, y) => {
-	pixelTobeFlipped.push([x, y])
+const changeGrid = (e) => {
+  const x = Math.floor(e.offsetX / props.pixelSize)
+  const y = Math.floor(e.offsetY / props.pixelSize)
+  cellsToBeFlipped.push([x, y])
 }
 
 const randomGrid = () => {
-	for (let i = 0; i <= gridCol.value; i++) {
-		for (let j = 0; j <= gridRow.value; j++) {
-			if (Math.random() < 0.65) {
-				grid[i][j].current = false
-			} else { grid[i][j].current = true }
-		}
-	}
+  cellsToBeFlipped = []
+  for (let i = 0; i <= props.columns; i++) {
+    for (let j = 0; j <= props.rows; j++) {
+      if (Math.random() < 0.65) {
+        grid[i][j].current = false
+        cellsTobeDrawn.push({ x: i, y: j, alive: false })
+      } else {
+        grid[i][j].current = true
+        cellsTobeDrawn.push({ x: i, y: j, alive: true })
+      }
+    }
+  }
+}
+
+const clearGrid = () => {
+  for (let i = 0; i <= props.columns; i++) {
+    for (let j = 0; j <= props.rows; j++) {
+      if (grid[i][j].current) {
+        cellsTobeDrawn.push({ x: i, y: j, alive: false })
+      }
+      grid[i][j].current = false
+    }
+  }
+  cellsToBeFlipped = []
 }
 
 const neighborOffsets = [
-	[-1, -1], [-1, 0], [-1, 1],
-	[0, -1], [0, 1],
-	[1, -1], [1, 0], [1, 1]
-];
+  [-1, -1],
+  [-1, 0],
+  [-1, 1],
+  [0, -1],
+  [0, 1],
+  [1, -1],
+  [1, 0],
+  [1, 1]
+]
 
 const applyRules = async () => {
-	for (let i = 0; i <= gridCol.value; i++) {
-		for (let j = 0; j <= gridRow.value; j++) {
-			let neighbors = 0;
-			for (let [dx, dy] of neighborOffsets) {
-				let nx = i + dx;
-				let ny = j + dy;
-				if (nx >= 0 && nx <= gridCol.value && ny >= 0 && ny <= gridRow.value && grid[nx][ny].current) {
-					neighbors++;
-				}
-			}
-			const alive = grid[i][j].current;
-			grid[i][j].next = alive ? (neighbors === 2 || neighbors === 3) : neighbors === 3;
-			if (grid[i][j].current !== grid[i][j].next) {
-				cellsTobeDrawn.push({ x: i, y: j, alive: grid[i][j].next })
-			}
-		}
-	}
-	for(let i = 0; i <= cellsTobeDrawn.length - 1; i++) {
-		grid[cellsTobeDrawn[i].x][cellsTobeDrawn[i].y].current = cellsTobeDrawn[i].alive
-	}
-};
-
+  for (let i = 0; i <= props.columns; i++) {
+    for (let j = 0; j <= props.rows; j++) {
+      let neighbors = 0
+      console.log('Grid length after adding columns:', grid.length)
+      for (let [dx, dy] of neighborOffsets) {
+        let nx = i + dx
+        let ny = j + dy
+        if (nx >= 0 && nx <= props.columns && ny >= 0 && ny <= props.rows && grid[nx][ny].current) {
+          neighbors++
+        }
+      }
+      const alive = grid[i][j].current
+      grid[i][j].next = alive ? neighbors === 2 || neighbors === 3 : neighbors === 3
+      if (grid[i][j].current !== grid[i][j].next) {
+        cellsTobeDrawn.push({ x: i, y: j, alive: grid[i][j].next })
+      }
+    }
+  }
+  for (let i = 0; i < cellsTobeDrawn.length; i++) {
+    grid[cellsTobeDrawn[i].x][cellsTobeDrawn[i].y].current = cellsTobeDrawn[i].alive
+  }
+}
 
 const renderGrid = async () => {
-	for (let i = 0; i < pixelTobeFlipped.length; i++) {
-		grid[pixelTobeFlipped[i][0]][pixelTobeFlipped[i][1]].current = !grid[pixelTobeFlipped[i][0]][pixelTobeFlipped[i][1]].current
-		cellsTobeDrawn.push({ x: pixelTobeFlipped[i][0], y: pixelTobeFlipped[i][1], alive: grid[pixelTobeFlipped[i][0]][pixelTobeFlipped[i][1]].current })
-	}
-	pixelTobeFlipped = []
-	for (let i = 0; i <= cellsTobeDrawn.length - 1; i++) {
-		if(cellsTobeDrawn[i].alive) {
-			ctx.value.fillRect(cellsTobeDrawn[i].x * props.pSize, cellsTobeDrawn[i].y * props.pSize, props.pSize, props.pSize)
-		} else {
-			ctx.value.clearRect(cellsTobeDrawn[i].x * props.pSize, cellsTobeDrawn[i].y * props.pSize, props.pSize, props.pSize)
-		}
-	}
-	cellsTobeDrawn = []
-	applyRules()
-	requestAnimationFrame(renderGrid)
+  for (let i = 0; i < cellsToBeFlipped.length; i++) {
+    grid[cellsToBeFlipped[i][0]][cellsToBeFlipped[i][1]].current =
+      !grid[cellsToBeFlipped[i][0]][cellsToBeFlipped[i][1]].current
+    cellsTobeDrawn.push({
+      x: cellsToBeFlipped[i][0],
+      y: cellsToBeFlipped[i][1],
+      alive: grid[cellsToBeFlipped[i][0]][cellsToBeFlipped[i][1]].current
+    })
+  }
+  cellsToBeFlipped = []
+  for (let i = 0; i < cellsTobeDrawn.length; i++) {
+    if (cellsTobeDrawn[i].alive) {
+      ctx.value.fillRect(
+        cellsTobeDrawn[i].x * props.pixelSize,
+        cellsTobeDrawn[i].y * props.pixelSize,
+        props.pixelSize,
+        props.pixelSize
+      )
+    } else {
+      ctx.value.clearRect(
+        cellsTobeDrawn[i].x * props.pixelSize,
+        cellsTobeDrawn[i].y * props.pixelSize,
+        props.pixelSize,
+        props.pixelSize
+      )
+    }
+  }
+  cellsTobeDrawn = []
+  if (props.running) {
+    applyRules()
+  }
+  requestAnimationFrame(renderGrid)
 }
 
 const moreColumns = () => {
-	gridCol.value++
-	grid[gridCol.value] = Array.from({ length: gridRow.value + 1 }, () => ({ current: false, next: false }))
+  grid.push(Array.from({ length: props.rows + 1 }, () => ({ current: false, next: false })))
 }
 
 const lessColumns = () => {
-	if (gridCol.value <= 3) {
-		gridCol.value = 3
-	} else {
-		gridCol.value--
-		grid.pop()
-	}
+  grid.pop()
 }
 
 const moreRows = () => {
-	gridRow.value++
-	grid.forEach((col) => {
-		col.push({ current: false, next: false })
-	})
+  grid.forEach((col) => {
+    col.push({ current: false, next: false })
+  })
 }
 
 const lessRows = () => {
-	if (gridRow.value <= 3) {
-		gridRow.value = 3
-	} else {
-		gridRow.value--
-		grid.forEach((col) => {
-			col.pop()
-		})
-	}
-}
-
-const playPause = () => {
-	if (running.value === 'PLAY') {
-
-	} else {
-		clearInterval(interval)
-	}
-}
-
-const faster = () => {
-	if (speed.value <= 10) {
-		speed.value = 10
-	} else {
-		speed.value -= 50
-		if (running.value === 'PAUSE') {
-			clearInterval(interval)
-		}
-	}
-}
-
-const slower = () => {
-	if (speed.value >= 1510) {
-		speed.value = 1510
-	} else {
-		speed.value += 50
-		if (running.value === 'PAUSE') {
-			clearInterval(interval)
-		}
-	}
+  grid.forEach((col) => {
+    col.pop()
+  })
 }
 
 defineExpose({
-	randomGrid,
-	applyRules,
-	moreColumns,
-	lessColumns,
-	moreRows,
-	lessRows,
-	faster,
-	slower,
-	playPause,
+  randomGrid,
+  clearGrid,
+  moreColumns,
+  lessColumns,
+  moreRows,
+  lessRows
 })
 
 onMounted(() => {
-	ctx.value = canvasRef.value.getContext('2d')
-	randomGrid()
-	renderGrid()
+  ctx.value = canvasRef.value.getContext('2d')
+  renderGrid()
 })
 </script>
