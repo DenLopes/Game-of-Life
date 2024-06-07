@@ -1,150 +1,170 @@
-<script setup>
-import Pixel from "../components/Pixel.vue"
-</script>
-
-<template> 
-    <div :style="{ 'grid-template-columns': 'repeat( '+(col+1)+', minmax(0, 1fr))'}" class="grid shadow-2xl w-fit">
-        <div v-for="(col, x_index) in grid" :key="x_index" class="grid w-fit">
-            <div v-for="(state, y_index) in col" :key="y_index" class="grid w-fit">
-                <Pixel @flipArray="changeGrid" :alive="state" :x="x_index" :y="y_index" :pSize="pSize"/>
-            </div>
-        </div>
-    </div>
+<template>
+	<div class="flex justify-center items-center w-full h-full">
+		<canvas ref="canvasRef" class="border-solid border-black border" @click="changeGrid" :width="(gridCol * pSize)"
+			:height="(gridRow * pSize)"></canvas>
+	</div>
 </template>
 
-<script>
-export default {
-    props: {
-        pSize: Number,
-    },
-    data() {
-        return {
-            col: 49,
-            row: 31,
-            grid: [],
-        }
-    },
-    methods: {
-        createGrid() {
-            for (let i = 0; i <= this.col; i++) {
-                this.grid[i] = []
-                for (let j = 0; j <= this.row; j++) {
-                    this.grid[i][j] = false
-                }
-            }
-        },
-        changeGrid(x, y) {
-            this.grid[x][y] = !this.grid[x][y]
-        },
-        randomGrid() {
-            for (let i = 0; i <= this.col; i++) {
-                this.grid[i] = []
-                for (let j = 0; j <= this.row; j++) {
-                    if (Math.random() < 0.65){
-                        this.grid[i][j] = false
-                    }else{this.grid[i][j] = true}
-                }
-            }
-        },
-        applyRulesGrid(){
-            let aux = [];
-            let neighbours;
-            for (let i = 0; i <= this.col; ++i) {
-                aux[i] = [];
-                for (let j = 0; j <= this.row; ++j) {
-                    neighbours = 0;
-                    for(let k = -1; k < 2; ++k){
-                        for(let y = -1; y < 2; ++y){
-                            if(k === 0 && y === 0){
-                                continue;
-                            }
-                            let x_pixel = i + k;
-                            let y_pixel = j + y;
-                            if(x_pixel >= 0 && y_pixel >= 0 && x_pixel < this.col && y_pixel < this.row){
-                                if(this.grid[i+k][j+y] === true){
-                                    neighbours++;
-                                }
-                            }
-                            
-                        }
-                    }
-                    if(this.grid[i][j] === false && neighbours === 3){
-                        aux[i][j] = true;
-                    }else if(this.grid[i][j] === true && (neighbours === 2 || neighbours === 3)){
-                        aux[i][j] = true;
-                    }else{
-                        aux[i][j] = false;
-                    }
-                }
-            }
-            this.grid = aux;
-        },
-        updateGrid() {
-            let aux = [];
-            for (let i = 0; i <= this.col; ++i) {
-                aux[i] = [];
-                for (let j = 0; j <= this.row; ++j) {
-                    aux[i][j] = this.grid[i][j]
-                }
-            }
-            this.grid = aux;
-        },
-        more_Columns() {
-            this.col++
-            this.grid[this.col] = []
-            for (let i = 0; i <= this.row; ++i) {
-                this.grid[this.col][i] = false
-            }
-            this.updateGrid();
-        },
-        less_Columns() {
-            if(this.col <= 3){
-                this.col = 3
-            }else{
-                this.col--
-                this.updateGrid();
-            }
-        },
-        more_Rows() {
-            this.row++
-            this.updateGrid();
-        },
-        less_Rows() {
-            if(this.row <= 3){
-                this.row = 3
-            }else{
-                this.row--
-                this.updateGrid();
-            }
-        },
-        emitInterface() {
-            this.$emit("interface", {
-                createGrid: () => this.createGrid(),
-                randomGrid: () => this.randomGrid(),
-                applyRules: () => this.applyRulesGrid(),
-                more_Columns: () => this.more_Columns(),
-                less_Columns: () => this.less_Columns(),
-                more_Rows: () => this.more_Rows(),
-                less_Rows: () => this.less_Rows(),
-            })
-        },
-        gridSizeCell() {
-			if(window.screen.availWidth < 500) {
-				this.col = 24
-                this.row = 46
-                this.updateGrid()
-			}else{
-                this.col = 49
-                this.row = 31
-                this.updateGrid()
-            }
-		},
-    },   
-    mounted() {
-        this.emitInterface();
-        this.createGrid();
-        this.gridSizeCell();
+<script setup>
+import { ref, onMounted } from "vue"
 
-    }
+const props = defineProps({
+	pSize: Number,
+})
+
+const running = defineModel()
+
+const gridCol = ref(420)
+const gridRow = ref(400)
+const ctx = ref()
+const canvasRef = ref()
+
+let pixelTobeFlipped = []
+let grid = Array.from({ length: gridCol.value + 1 }, () =>
+	Array.from({ length: gridRow.value + 1 }, () => ({ current: false, next: false }))
+);
+let cellsTobeDrawn = Array.from({ length: gridCol.value * gridRow.value }, () => ({ x: 0, y: 0, alive: false }))
+
+
+const changeGrid = (x, y) => {
+	pixelTobeFlipped.push([x, y])
 }
+
+const randomGrid = () => {
+	for (let i = 0; i <= gridCol.value; i++) {
+		for (let j = 0; j <= gridRow.value; j++) {
+			if (Math.random() < 0.65) {
+				grid[i][j].current = false
+			} else { grid[i][j].current = true }
+		}
+	}
+}
+
+const neighborOffsets = [
+	[-1, -1], [-1, 0], [-1, 1],
+	[0, -1], [0, 1],
+	[1, -1], [1, 0], [1, 1]
+];
+
+const applyRules = async () => {
+	for (let i = 0; i <= gridCol.value; i++) {
+		for (let j = 0; j <= gridRow.value; j++) {
+			let neighbors = 0;
+			for (let [dx, dy] of neighborOffsets) {
+				let nx = i + dx;
+				let ny = j + dy;
+				if (nx >= 0 && nx <= gridCol.value && ny >= 0 && ny <= gridRow.value && grid[nx][ny].current) {
+					neighbors++;
+				}
+			}
+			const alive = grid[i][j].current;
+			grid[i][j].next = alive ? (neighbors === 2 || neighbors === 3) : neighbors === 3;
+			if (grid[i][j].current !== grid[i][j].next) {
+				cellsTobeDrawn.push({ x: i, y: j, alive: grid[i][j].next })
+			}
+		}
+	}
+	for(let i = 0; i <= cellsTobeDrawn.length - 1; i++) {
+		grid[cellsTobeDrawn[i].x][cellsTobeDrawn[i].y].current = cellsTobeDrawn[i].alive
+	}
+};
+
+
+const renderGrid = async () => {
+	for (let i = 0; i < pixelTobeFlipped.length; i++) {
+		grid[pixelTobeFlipped[i][0]][pixelTobeFlipped[i][1]].current = !grid[pixelTobeFlipped[i][0]][pixelTobeFlipped[i][1]].current
+		cellsTobeDrawn.push({ x: pixelTobeFlipped[i][0], y: pixelTobeFlipped[i][1], alive: grid[pixelTobeFlipped[i][0]][pixelTobeFlipped[i][1]].current })
+	}
+	pixelTobeFlipped = []
+	for (let i = 0; i <= cellsTobeDrawn.length - 1; i++) {
+		if(cellsTobeDrawn[i].alive) {
+			ctx.value.fillRect(cellsTobeDrawn[i].x * props.pSize, cellsTobeDrawn[i].y * props.pSize, props.pSize, props.pSize)
+		} else {
+			ctx.value.clearRect(cellsTobeDrawn[i].x * props.pSize, cellsTobeDrawn[i].y * props.pSize, props.pSize, props.pSize)
+		}
+	}
+	cellsTobeDrawn = []
+	applyRules()
+	requestAnimationFrame(renderGrid)
+}
+
+const moreColumns = () => {
+	gridCol.value++
+	grid[gridCol.value] = Array.from({ length: gridRow.value + 1 }, () => ({ current: false, next: false }))
+}
+
+const lessColumns = () => {
+	if (gridCol.value <= 3) {
+		gridCol.value = 3
+	} else {
+		gridCol.value--
+		grid.pop()
+	}
+}
+
+const moreRows = () => {
+	gridRow.value++
+	grid.forEach((col) => {
+		col.push({ current: false, next: false })
+	})
+}
+
+const lessRows = () => {
+	if (gridRow.value <= 3) {
+		gridRow.value = 3
+	} else {
+		gridRow.value--
+		grid.forEach((col) => {
+			col.pop()
+		})
+	}
+}
+
+const playPause = () => {
+	if (running.value === 'PLAY') {
+
+	} else {
+		clearInterval(interval)
+	}
+}
+
+const faster = () => {
+	if (speed.value <= 10) {
+		speed.value = 10
+	} else {
+		speed.value -= 50
+		if (running.value === 'PAUSE') {
+			clearInterval(interval)
+		}
+	}
+}
+
+const slower = () => {
+	if (speed.value >= 1510) {
+		speed.value = 1510
+	} else {
+		speed.value += 50
+		if (running.value === 'PAUSE') {
+			clearInterval(interval)
+		}
+	}
+}
+
+defineExpose({
+	randomGrid,
+	applyRules,
+	moreColumns,
+	lessColumns,
+	moreRows,
+	lessRows,
+	faster,
+	slower,
+	playPause,
+})
+
+onMounted(() => {
+	ctx.value = canvasRef.value.getContext('2d')
+	randomGrid()
+	renderGrid()
+})
 </script>

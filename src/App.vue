@@ -1,35 +1,32 @@
-<script setup>
-import Grid from './components/Grid.vue'
-</script>
-
 <template>
 	<div class="flex md:justify-center w-screen mb-1">
 		<div class="flex lg:flex-row md:justify-around flex-col w-full m-2">
 			<div class="flex self-center w-fit rounded-md bg-red-400 mb-1 lg:m-0">
 				<button @click="randomGrid()" class="h-10 w-fit p-2 font-bold">RANDOM</button>
 				<button @click="createGrid()" class="h-10 w-fit p-2 px-4 font-bold bg-yellow-400">CLEAR</button>
-				<button @click="play_Pause()" class="h-10 w-fit p-2 px-4 font-bold  rounded-r-md bg-green-400">{{ state }}</button>
+				<button @click="playPause(state)" class="h-10 w-fit p-2 px-4 font-bold  rounded-r-md bg-green-400">{{ state
+					}}</button>
 			</div>
 			<div class="flex justify-center">
 				<div class="flex md:flex-row flex-col">
 					<p class="flex items-center mr-1 font-bold">COLUMNS:</p>
 					<div class="rounded-md h-fit bg-blue-400 mr-2">
-						<button @click="more_Columns()" class="font-extrabold h-8 w-10 m-auto">+</button>
-						<button @click="less_Columns()" class="font-extrabold h-8 w-10 m-auto border-l-2 border-black">-</button>
+						<button @click="moreColumns()" class="font-extrabold h-8 w-10 m-auto">+</button>
+						<button @click="lessColumns()" class="font-extrabold h-8 w-10 m-auto border-l-2 border-black">-</button>
 					</div>
 				</div>
 				<div class="flex md:flex-row flex-col">
 					<p class="flex items-center mr-1 font-bold">ROWNS:</p>
 					<div class="rounded-md h-fit bg-blue-400 mr-2">
-						<button @click="more_Rows()" class="font-extrabold h-8 w-10 m-auto">+</button>
-						<button @click="less_Rows()" class="font-extrabold h-8 w-10 m-auto border-l-2 border-black">-</button>
+						<button @click="moreRows()" class="font-extrabold h-8 w-10 m-auto">+</button>
+						<button @click="lessRows()" class="font-extrabold h-8 w-10 m-auto border-l-2 border-black">-</button>
 					</div>
 				</div>
 				<div class="flex md:flex-row flex-col">
 					<p class="flex items-center mr-1 font-bold">TILES SIZE:</p>
 					<div class="rounded-md h-fit bg-blue-400 mr-2">
-						<button @click="size_Up()" class="font-extrabold h-8 w-10 m-auto">+</button>
-						<button @click="size_Down()" class="font-extrabold h-8 w-10 m-auto border-l-2 border-black">-</button>
+						<button @click="sizeUp()" class="font-extrabold h-8 w-10 m-auto">+</button>
+						<button @click="sizeDown()" class="font-extrabold h-8 w-10 m-auto border-l-2 border-black">-</button>
 					</div>
 				</div>
 				<div class="flex md:flex-row flex-col">
@@ -42,102 +39,74 @@ import Grid from './components/Grid.vue'
 			</div>
 		</div>
 	</div>
-	<div class="flex justify-center">
-		<Grid @interface="getChildInterface" :pSize="pixelSize"></Grid>
-	</div>     
+	<div class="flex justify-center overflow-auto">
+		<Grid v-model="state" ref="gridRef" :pSize="pixelSize"></Grid>
+	</div>
 </template>
+<script setup>
+import { ref, onMounted } from 'vue'
+import Grid from './components/Grid.vue'
 
-<script>
-export default {
-    data() {
-    	return{
-    		state: 'PLAY',
-			pixelSize: 18,
-			speed: 260,
-    	}
-    },
-    childInterface: {
-    	createGrid: () => {},
-    	randomGrid: () => {},
-    	applyRules: () => {},
-		more_Columns: () => {},
-		less_Columns: () => {},
-		more_Rows: () => {},
-		less_Rows: () => {},
-    },
-    methods: {
-    	getChildInterface(childInterface) {
-    		this.$options.childInterface = childInterface
-    	},
-    	createGrid(){
-    		this.$options.childInterface.createGrid()
-    	},
-      	randomGrid(){
-        	this.$options.childInterface.randomGrid()
-      	},
-      	applyRules(){
-        	this.$options.childInterface.applyRules()
-      	},
-		more_Columns(){
-			this.$options.childInterface.more_Columns()
-		},
-		less_Columns(){
-			this.$options.childInterface.less_Columns()
-		},
-		more_Rows(){
-			this.$options.childInterface.more_Rows()
-		},
-		less_Rows(){
-			this.$options.childInterface.less_Rows()
-		},
-      	play_Pause() {
-            if(this.state === 'PLAY'){
-                this.state = 'PAUSE'
-                return this.interval = setInterval(() => this.applyRules(), this.speed)
-            }else{
-                this.state = 'PLAY'
-                return clearInterval(this.interval)
-            }
-      	},
-		size_Up() {
-        	this.pixelSize++  
-      	},
-      	size_Down() {
-        	this.pixelSize--
-      	},
-		pixelSizeCell() {
-			if(window.screen.availWidth < 400) {
-				this.pixelSize = 10
-			}
-		},
-		faster() {
-			if(this.speed <= 10) {
-				this.speed = 10
-			}else{
-				this.speed -= 50
-				console.log(this.speed+'ms')
-				if(this.state === 'PAUSE') {
-					clearInterval(this.interval)
-					return this.interval = setInterval(() => this.applyRules(), this.speed)
-				}
-			}
-		},
-		slower() {
-			if(this.speed >= 1510) {
-				this.speed = 1510
-			}else{
-				this.speed += 50
-				console.log(this.speed+'ms')
-				if(this.state === 'PAUSE') {
-					clearInterval(this.interval)
-					return this.interval = setInterval(() => this.applyRules(), this.speed)
-				}
-			}
-		},
-    },
-	mounted() {
-		this.pixelSizeCell()
+const state = ref('PLAY')
+const pixelSize = ref(4)
+const gridRef = ref(null)
+
+const createGrid = () => {
+	gridRef.value.createGrid()
+}
+
+const randomGrid = () => {
+	gridRef.value.randomGrid()
+}
+
+const moreColumns = () => {
+	gridRef.value.moreColumns()
+}
+
+const lessColumns = () => {
+	gridRef.value.lessColumns()
+}
+
+const moreRows = () => {
+	gridRef.value.moreRows()
+}
+
+const lessRows = () => {
+	gridRef.value.lessRows()
+}
+
+const slower = () => {
+	gridRef.value.slower()
+}
+
+const faster = () => {
+	gridRef.value.faster()
+}
+
+const playPause = () => {
+	gridRef.value.playPause()
+	if (state.value === 'PLAY') {
+		state.value = 'PAUSE'
+	} else {
+		state.value = 'PLAY'
 	}
 }
-</script>
 
+const sizeUp = () => {
+	pixelSize.value++
+}
+
+const sizeDown = () => {
+	pixelSize.value--
+}
+
+const pixelSizeCell = () => {
+	if (window.screen.availWidth < 400) {
+		pixelSize.value = 10
+	}
+}
+
+onMounted(() => {
+	pixelSizeCell()
+})
+</script>
