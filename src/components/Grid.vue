@@ -1,16 +1,11 @@
 <template>
   <div class="flex justify-center items-center w-full h-full">
-    <canvas
-      ref="canvasRef"
-      @click="changeGrid"
-      :width="(columns + 1) * pixelSize"
-      :height="(rows + 1) * pixelSize"
-    ></canvas>
+    <canvas ref="canvasRef" :width="(columns + 1) * pixelSize" :height="(rows + 1) * pixelSize"></canvas>
   </div>
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, onUnmounted } from 'vue'
 
 const props = defineProps({
   pixelSize: Number,
@@ -25,47 +20,46 @@ const ctx = ref()
 const canvasRef = ref()
 
 // variables
-let cellsToBeFlipped = []
 let grid = Array.from({ length: props.columns + 1 }, () =>
-  Array.from({ length: props.rows + 1 }, () => ({ current: false, next: false }))
+  Array.from({ length: props.rows + 1 }, () => (false))
 )
-let cellsTobeDrawn = Array.from({ length: props.columns * props.rows }, () => ({
-  x: 0,
-  y: 0,
-  alive: false
+let cellsAlive = Array.from({ length: props.columns * props.rows }, () => ({
 }))
+let mouseDown = false
 
 const changeGrid = (e) => {
   const x = Math.floor(e.offsetX / props.pixelSize)
   const y = Math.floor(e.offsetY / props.pixelSize)
-  cellsToBeFlipped.push([x, y])
+  if (x > 0 && x < props.columns && y > 0 && y < props.rows) {
+    grid[x][y] = !grid[x][y]
+    if (grid[x][y]) {
+      cellsAlive.push({ x, y })
+    } else {
+      cellsAlive = cellsAlive.filter(cell => !(cell.x === x && cell.y === y));
+    }
+  }
 }
 
 const randomGrid = () => {
-  cellsToBeFlipped = []
-  for (let i = 0; i <= props.columns; i++) {
-    for (let j = 0; j <= props.rows; j++) {
-      if (Math.random() < 0.65) {
-        grid[i][j].current = false
-        cellsTobeDrawn.push({ x: i, y: j, alive: false })
-      } else {
-        grid[i][j].current = true
-        cellsTobeDrawn.push({ x: i, y: j, alive: true })
+  cellsAlive = []
+  grid = Array.from({ length: props.columns + 1 }, () =>
+    Array.from({ length: props.rows + 1 }, () => (false))
+  )
+  for (let i = 1; i < props.columns; i++) {
+    for (let j = 1; j < props.rows; j++) {
+      if (Math.random() < 0.4) {
+        cellsAlive.push({ x: i, y: j })
+        grid[i][j] = true
       }
     }
   }
 }
 
 const clearGrid = () => {
-  for (let i = 0; i <= props.columns; i++) {
-    for (let j = 0; j <= props.rows; j++) {
-      if (grid[i][j].current) {
-        cellsTobeDrawn.push({ x: i, y: j, alive: false })
-      }
-      grid[i][j].current = false
-    }
-  }
-  cellsToBeFlipped = []
+  cellsAlive = []
+  grid = Array.from({ length: props.columns + 1 }, () =>
+    Array.from({ length: props.rows + 1 }, () => (false))
+  )
 }
 
 const neighborOffsets = [
@@ -80,95 +74,87 @@ const neighborOffsets = [
 ]
 
 const applyRules = async () => {
-  for (let i = 0; i <= props.columns; i++) {
-    for (let j = 0; j <= props.rows; j++) {
+  console.time('applyRules')
+  const newGrid = Array.from({ length: props.columns + 1 }, () =>
+    Array.from({ length: props.rows + 1 }, () => (false))
+  )
+  const newCellsAlive = []
+  for (let i = 1; i < props.columns; i++) {
+    for (let j = 1; j < props.rows; j++) {
       let neighbors = 0
-      console.log('Grid length after adding columns:', grid.length)
-      for (let [dx, dy] of neighborOffsets) {
-        let nx = i + dx
-        let ny = j + dy
-        if (nx >= 0 && nx <= props.columns && ny >= 0 && ny <= props.rows && grid[nx][ny].current) {
+      for (const [x, y] of neighborOffsets) {
+        if (grid[i + x] && grid[i + x][j + y]) {
           neighbors++
         }
       }
-      const alive = grid[i][j].current
-      grid[i][j].next = alive ? neighbors === 2 || neighbors === 3 : neighbors === 3
-      if (grid[i][j].current !== grid[i][j].next) {
-        cellsTobeDrawn.push({ x: i, y: j, alive: grid[i][j].next })
+      if (grid[i][j]) {
+        if (neighbors === 2 || neighbors === 3) {
+          newGrid[i][j] = true
+          newCellsAlive.push({ x: i, y: j })
+        }
+      } else {
+        if (neighbors === 3) {
+          newGrid[i][j] = true
+          newCellsAlive.push({ x: i, y: j })
+        }
       }
     }
   }
-  for (let i = 0; i < cellsTobeDrawn.length; i++) {
-    grid[cellsTobeDrawn[i].x][cellsTobeDrawn[i].y].current = cellsTobeDrawn[i].alive
-  }
+  grid = newGrid
+  cellsAlive = newCellsAlive
+  console.timeEnd('applyRules')
 }
 
 const renderGrid = async () => {
-  for (let i = 0; i < cellsToBeFlipped.length; i++) {
-    grid[cellsToBeFlipped[i][0]][cellsToBeFlipped[i][1]].current =
-      !grid[cellsToBeFlipped[i][0]][cellsToBeFlipped[i][1]].current
-    cellsTobeDrawn.push({
-      x: cellsToBeFlipped[i][0],
-      y: cellsToBeFlipped[i][1],
-      alive: grid[cellsToBeFlipped[i][0]][cellsToBeFlipped[i][1]].current
-    })
+  ctx.value.clearRect(0, 0, canvasRef.value.width, canvasRef.value.height)
+  for (const { x, y } of cellsAlive) {
+    ctx.value.fillRect(x * props.pixelSize, y * props.pixelSize, props.pixelSize, props.pixelSize)
   }
-  cellsToBeFlipped = []
-  for (let i = 0; i < cellsTobeDrawn.length; i++) {
-    if (cellsTobeDrawn[i].alive) {
-      ctx.value.fillRect(
-        cellsTobeDrawn[i].x * props.pixelSize,
-        cellsTobeDrawn[i].y * props.pixelSize,
-        props.pixelSize,
-        props.pixelSize
-      )
-    } else {
-      ctx.value.clearRect(
-        cellsTobeDrawn[i].x * props.pixelSize,
-        cellsTobeDrawn[i].y * props.pixelSize,
-        props.pixelSize,
-        props.pixelSize
-      )
+
+  setTimeout(() => {
+    renderGrid()
+    if (props.running) {
+      applyRules()
     }
-  }
-  cellsTobeDrawn = []
-  if (props.running) {
-    applyRules()
-  }
-  requestAnimationFrame(renderGrid)
+  }, props.simulationSpeed)
 }
 
-const moreColumns = () => {
-  grid.push(Array.from({ length: props.rows + 1 }, () => ({ current: false, next: false })))
-}
 
-const lessColumns = () => {
-  grid.pop()
-}
-
-const moreRows = () => {
-  grid.forEach((col) => {
-    col.push({ current: false, next: false })
-  })
-}
-
-const lessRows = () => {
-  grid.forEach((col) => {
-    col.pop()
-  })
-}
 
 defineExpose({
   randomGrid,
   clearGrid,
-  moreColumns,
-  lessColumns,
-  moreRows,
-  lessRows
 })
 
 onMounted(() => {
-  ctx.value = canvasRef.value.getContext('2d')
-  renderGrid()
-})
+  ctx.value = canvasRef.value.getContext('2d');
+  ctx.value.fillStyle = 'black';
+  renderGrid();
+
+  const handleMouseDown = (e) => {
+    mouseDown = true;
+    changeGrid(e);
+  };
+
+  const handleMouseUp = () => {
+    mouseDown = false;
+  };
+
+  const handleMouseMove = (e) => {
+    if (mouseDown) {
+      changeGrid(e);
+    }
+  };
+
+  canvasRef.value.addEventListener('mousedown', handleMouseDown);
+  canvasRef.value.addEventListener('mouseup', handleMouseUp);
+  canvasRef.value.addEventListener('mousemove', handleMouseMove);
+});
+
+// Existing onUnmounted function with updates to remove the correct listeners
+onUnmounted(() => {
+  canvasRef.value.removeEventListener('mousedown', handleMouseDown);
+  canvasRef.value.removeEventListener('mouseup', handleMouseUp);
+  canvasRef.value.removeEventListener('mousemove', handleMouseMove);
+});
 </script>

@@ -98,13 +98,13 @@ import { ref, watch } from 'vue'
 import Grid from './components/Grid.vue'
 
 const running = ref(false)
-const pixelSize = ref(10)
+const pixelSize = ref(16)
 const gridRef = ref(null)
 const simulationSpeed = ref(100)
-const columns = ref(180)
-const debounceColumns = ref(180)
-const rows = ref(90)
-const debounceRows = ref(90)
+const columns = ref(400)
+const debounceColumns = ref(400)
+const rows = ref(300)
+const debounceRows = ref(300)
 
 watch(columns, async () => {
   await new Promise((resolve) => {
