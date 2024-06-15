@@ -46,7 +46,7 @@ onMounted(async () => {
   app.stage.addChild(container);
   container.scale.set(props.scale, props.scale);
 
-  const socket = new WebSocket('ws://localhost:8080/ws');
+  const socket = new WebSocket(import.meta.env.VITE_WS_URL);
 
   socket.onopen = () => {
     console.log('Connected to server');
