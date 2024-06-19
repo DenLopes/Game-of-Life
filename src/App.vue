@@ -10,15 +10,8 @@
         class="bg-black text-white font-bold p-2 rounded-md border border-solid border-white">Clear
         Grid</button>
     </div>
-    <div class="flex justify-center">
-      <button @click="gameState"
-        class="bg-black text-white font-bold p-2 rounded-md border border-solid border-white">{{
-          isGameRunning ? 'Stop Game' : 'Start Game'
-        }}</button>
-    </div>
   </div>
-  <Grid ref="gridRef" :game-running="isGameRunning"
-    @update:gameRunning="(event) => (isGameRunning = event)" />
+  <Grid ref="gridRef" :game-running="isGameRunning" @update:gameRunning="(event) => (isGameRunning = event)" />
 </template>
 <script setup>
 import { ref } from 'vue'
@@ -33,13 +26,5 @@ const randomGrid = () => {
 
 const clearGrid = () => {
   gridRef.value.clearGrid()
-}
-
-const gameState = () => {
-  if (isGameRunning.value) {
-    gridRef.value.stopGame()
-  } else {
-    gridRef.value.startGame()
-  }
 }
 </script>
