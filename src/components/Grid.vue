@@ -3,128 +3,93 @@
 </template>
 
 <script setup>
-import { ref, onMounted, onUnmounted } from 'vue';
+import { ref, onMounted, onUnmounted, reactive } from 'vue';
 import { Application, Sprite, Texture, Container, Graphics, Point } from 'pixi.js';
+import { AdvancedBloomFilter, CRTFilter, BulgePinchFilter } from 'pixi-filters';
 import snappy from 'snappyjs';
 
-const socket = new WebSocket(import.meta.env.VITE_WS_URL);
+const app = new Application();
+const container = new Container();
+const containerGrid = new Container();
 
+const socket = new WebSocket(import.meta.env.VITE_WS_URL);
 socket.binaryType = 'arraybuffer';
+socket.onopen = () => {
+  console.log('Connected to server');
+};
 
 const props = defineProps({
   scale: Number,
   gameRunning: Boolean,
 });
 
-const emit = defineEmits(['update:gameRunning']);
-
 const pixiContainer = ref(null);
 
-socket.onopen = () => {
-  console.log('Connected to server');
-};
-
-const app = new Application();
-const container = new Container();
-
-let gridScale = 2;
 const pixelSize = 10;
+let gridScale = 2;
 let width = 256;
 let height = 256;
-let cellsPoolMap = new Map();
 let animationFrameId;
 let targetPixelSize = gridScale;
-const containerGrid = new Container();
 let containerPosition = { x: 0, y: 0 }
-
-const createCell = (x, y) => {
-  const square = new Sprite(Texture.WHITE);
-  square.width = pixelSize - 1;
-  square.height = pixelSize - 1;
-  square.tint = 0xffffff;
-  square.position.set(x * pixelSize + 1, y * pixelSize + 1);
-  return square;
-};
+let cellsPoolMap = new Map();
 
 const bg = new Sprite(Texture.WHITE);
 bg.tint = 0x000000;
 bg.alpha = 0;
 bg.position.set(0, 0);
 
-const renderCells = () => {
-  for (const [id, cell] of cellsPoolMap) {
-    let renderable =
-      cell.x * gridScale + containerPosition.x > -(pixelSize * gridScale) &&
-      cell.x * gridScale + containerPosition.x < app.screen.width &&
-      cell.y * gridScale + containerPosition.y > -(pixelSize * gridScale) &&
-      cell.y * gridScale + containerPosition.y < app.screen.height;
-    if (renderable) {
-      cell.visible = true;
-    } else {
-      cell.visible = false;
-    }
-  }
-  requestAnimationFrame(renderCells);
+const createCell = (x, y) => {
+  const square = new Sprite(Texture.WHITE);
+  square.width = pixelSize - 2;
+  square.height = pixelSize - 2;
+  square.tint = 0xffffff;
+  square.position.set(x * pixelSize + 2, y * pixelSize + 2);
+  return square;
 };
 
 const updateCells = (bitArray) => {
-  const newCells = [];
   let x = 0;
   let y = 0;
+
   for (let i = 0; i < width * height; i++) {
-    if (bitArray[i] === 1) {
-      newCells.push({ x, y });
+    const id = `${x},${y}`;
+    const existingCell = cellsPoolMap.get(id);
+    const bit = bitArray[i];
+
+    if (bit === 1 && !existingCell) {
+      const cell = createCell(x, y);
+      container.addChild(cell);
+      cellsPoolMap.set(id, cell);
+    } else if (bit === 0 && existingCell) {
+      existingCell.renderable = false;
+    } else if (bit === 1 && existingCell) {
+      existingCell.renderable = true;
     }
-    x++;
-    if (x >= width) {
+
+    // Increment x, and reset x and increment y when hitting the width limit
+    if (++x === width) {
       x = 0;
       y++;
     }
   }
-
-  const cellsToUpdate = new Map();
-
-  // Mark all existing cells for removal
-  cellsPoolMap.forEach((cell, id) => {
-    cellsToUpdate.set(id, { cell, action: 'remove' });
-  });
-
-  // Process new cells, either marking them for addition or cancelling removal
-  newCells.forEach(({ x, y }) => {
-    const id = `${x}_${y}`;
-    if (cellsToUpdate.has(id)) {
-      // If already marked for removal, cancel the removal
-      cellsToUpdate.get(id).action = 'keep';
-    } else {
-      // Mark new cell for addition
-      const newCell = createCell(x, y);
-      cellsToUpdate.set(id, { cell: newCell, action: 'add' });
-    }
-  });
-
-  // Execute the updates
-  cellsToUpdate.forEach(({ cell, action }, id) => {
-    if (action === 'add') {
-      container.addChild(cell);
-      cellsPoolMap.set(id, cell);
-    } else if (action === 'remove') {
-      container.removeChild(cell);
-      cell.destroy();
-      cellsPoolMap.delete(id);
-    }
-  });
 };
 
-const randomGrid = () => {
-  socket.send('random');
-};
+const renderCells = () => {
+  const minBoundX = -(pixelSize * gridScale);
+  const minBoundY = -(pixelSize * gridScale);
+  const maxBoundX = app.screen.width;
+  const maxBoundY = app.screen.height;
+  const offsetX = containerPosition.x;
+  const offsetY = containerPosition.y;
 
-const clearGrid = () => {
-  socket.send('clear');
-};
-
-const lerp = (a, b, t) => {
-  return a + (b - a) * t;
+  for (const [id, cell] of cellsPoolMap) {
+    let screenPosX = cell.x * gridScale + offsetX;
+    let screenPosY = cell.y * gridScale + offsetY;
+    cell.visible = (screenPosX > minBoundX && screenPosX < maxBoundX &&
+      screenPosY > minBoundY && screenPosY < maxBoundY);
+  }
+  requestAnimationFrame(renderCells);
 };
 
 const animateResize = () => {
@@ -132,8 +97,20 @@ const animateResize = () => {
   gridScale = lerp(gridScale, targetPixelSize, 0.2);
   if (Math.abs(gridScale - targetPixelSize) > 0.01) {
     container.scale.set(gridScale, gridScale);
-    containerPosition.x += ((width * pixelSize) * prevGridScale - (width * pixelSize) * gridScale) / 2;
-    containerPosition.y += ((height * pixelSize) * prevGridScale - (height * pixelSize) * gridScale) / 2;
+    //move the container to keep the center of the grid in the same place
+    containerPosition.x = containerPosition.x - ((width * pixelSize) * (gridScale - prevGridScale)) / 2;
+    containerPosition.y = containerPosition.y - ((height * pixelSize) * (gridScale - prevGridScale)) / 2;
+    //if container is out of bounds, move it back
+    if (containerPosition.x > 0) {
+      containerPosition.x = 0;
+    } else if (containerPosition.x < app.screen.width - (width * pixelSize * gridScale)) {
+      containerPosition.x = app.screen.width - (width * pixelSize * gridScale);
+    }
+    if (containerPosition.y > 0) {
+      containerPosition.y = 0;
+    } else if (containerPosition.y < app.screen.height - (height * pixelSize * gridScale)) {
+      containerPosition.y = app.screen.height - (height * pixelSize * gridScale);
+    }
     container.position.set(containerPosition.x, containerPosition.y);
     animationFrameId = requestAnimationFrame(animateResize);
   } else {
@@ -158,6 +135,18 @@ const handleBlob = async (arrayBuffer) => {
   return bitArray;
 }
 
+const randomGrid = () => {
+  socket.send('random');
+};
+
+const clearGrid = () => {
+  socket.send('clear');
+};
+
+const lerp = (a, b, t) => {
+  return a + (b - a) * t;
+};
+
 defineExpose({ randomGrid, clearGrid });
 
 onMounted(async () => {
@@ -165,7 +154,14 @@ onMounted(async () => {
   await app.init({
     resizeTo: window,
     backgroundColor: 0x000000,
+    antialias: true,
+    webgpu: true,
   });
+  app.stage.filters = [
+    new BulgePinchFilter({ radius: 1100, strength: .060, center: { x: 0.5, y: 0.5 } }),
+    new CRTFilter({ curvature: 4, lineWidth: 1, vignetting: 0.3, noise: 0.3, time: 1, noiseSize: .3, vignettingAlpha: 0.5, seed: 0. }),
+    new AdvancedBloomFilter({ threshold: 0.1, bloomScale: 1.7, brightness: 1.6, blur: 20, quality: 20 }),
+  ];
   pixiContainer.value.appendChild(app.canvas);
 
   app.stage.addChild(container);
@@ -173,11 +169,11 @@ onMounted(async () => {
   container.eventMode = 'static';
 
   for (let i = 0; i <= width; i++) {
-    const line = new Graphics().rect(i * pixelSize, 0, 1, height * pixelSize).fill({ color: 0xffffff, alpha: 0.25 });
+    const line = new Graphics().rect(i * pixelSize, 0, 2, height * pixelSize).fill({ color: 0x414342 });
     containerGrid.addChild(line);
   }
   for (let i = 0; i <= height; i++) {
-    const line = new Graphics().rect(0, i * pixelSize, width * pixelSize, 1).fill({ color: 0xffffff, alpha: 0.25 });
+    const line = new Graphics().rect(0, i * pixelSize, width * pixelSize, 2).fill({ color: 0x414342 });
     containerGrid.addChild(line);
   }
   bg.width = width * pixelSize
@@ -246,7 +242,6 @@ onMounted(async () => {
         targetPixelSize = 1;
       }
     }
-
     if (!animationFrameId) {
       animationFrameId = requestAnimationFrame(animateResize);
     }
@@ -267,8 +262,21 @@ onMounted(async () => {
 
   addEventListener('mousemove', (e) => {
     if (e.altKey && isDragging) {
-      containerPosition.x += e.movementX
-      containerPosition.y += e.movementY
+      //stop moving at the edges
+      if (containerPosition.x + e.movementX > 0) {
+        containerPosition.x = 0
+      } else if (containerPosition.x + e.movementX < app.screen.width - (width * pixelSize * gridScale)) {
+        containerPosition.x = app.screen.width - (width * pixelSize * gridScale)
+      } else {
+        containerPosition.x += e.movementX
+      }
+      if (containerPosition.y + e.movementY > 0) {
+        containerPosition.y = 0
+      } else if (containerPosition.y + e.movementY < app.screen.height - (height * pixelSize * gridScale)) {
+        containerPosition.y = app.screen.height - (height * pixelSize * gridScale)
+      } else {
+        containerPosition.y += e.movementY
+      }
       container.position.set(containerPosition.x, containerPosition.y)
     }
   });
