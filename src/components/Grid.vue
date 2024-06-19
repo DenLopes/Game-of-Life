@@ -4,9 +4,12 @@
 
 <script setup>
 import { ref, onMounted, onUnmounted } from 'vue';
-import { Application, Sprite, Texture, Container, Graphics, GraphicsContext, childrenHelperMixin, Point } from 'pixi.js';
+import { Application, Sprite, Texture, Container, Graphics, Point } from 'pixi.js';
+import snappy from 'snappyjs';
 
 const socket = new WebSocket(import.meta.env.VITE_WS_URL);
+
+socket.binaryType = 'arraybuffer';
 
 const props = defineProps({
   scale: Number,
@@ -24,10 +27,10 @@ socket.onopen = () => {
 const app = new Application();
 const container = new Container();
 
-let gridScale = 4
+let gridScale = 2;
 const pixelSize = 10;
-let width = 0;
-let height = 0;
+let width = 256;
+let height = 256;
 let cellsPoolMap = new Map();
 let animationFrameId;
 let targetPixelSize = gridScale;
@@ -49,19 +52,36 @@ bg.alpha = 0;
 bg.position.set(0, 0);
 
 const renderCells = () => {
-  const minX = container.x;
-  const minY = container.y;
-  const maxX = app.screen.width;
-  const maxY = app.screen.height;
-
-  for (const cell of container.children) {
-    if (cell.x + pixelSize < minX || cell.x > maxX || cell.y + pixelSize < minY || cell.y > maxY) {
-      cell.renderable = false;
+  for (const [id, cell] of cellsPoolMap) {
+    let renderable =
+      cell.x * gridScale + containerPosition.x > -(pixelSize * gridScale) &&
+      cell.x * gridScale + containerPosition.x < app.screen.width &&
+      cell.y * gridScale + containerPosition.y > -(pixelSize * gridScale) &&
+      cell.y * gridScale + containerPosition.y < app.screen.height;
+    if (renderable) {
+      cell.visible = true;
+    } else {
+      cell.visible = false;
     }
   }
+  requestAnimationFrame(renderCells);
 };
 
-const updateCells = (newCells) => {
+const updateCells = (bitArray) => {
+  const newCells = [];
+  let x = 0;
+  let y = 0;
+  for (let i = 0; i < width * height; i++) {
+    if (bitArray[i] === 1) {
+      newCells.push({ x, y });
+    }
+    x++;
+    if (x >= width) {
+      x = 0;
+      y++;
+    }
+  }
+
   const cellsToUpdate = new Map();
 
   // Mark all existing cells for removal
@@ -103,14 +123,6 @@ const clearGrid = () => {
   socket.send('clear');
 };
 
-const stopGame = () => {
-  socket.send('stop');
-};
-
-const startGame = () => {
-  socket.send('start');
-};
-
 const lerp = (a, b, t) => {
   return a + (b - a) * t;
 };
@@ -129,9 +141,27 @@ const animateResize = () => {
   }
 };
 
-defineExpose({ randomGrid, clearGrid, stopGame, startGame });
+const byteToBitArray = (byte) => {
+  const bits = [];
+  for (let i = 7; i >= 0; i--) {
+    bits.push((byte & (1 << i)) ? 1 : 0);
+  }
+  return bits;
+};
+
+const handleBlob = async (arrayBuffer) => {
+  const byteArray = new Uint8Array(arrayBuffer);
+  const bitArray = [];
+  byteArray.forEach((byte) => {
+    bitArray.push(...byteToBitArray(byte));
+  });
+  return bitArray;
+}
+
+defineExpose({ randomGrid, clearGrid });
 
 onMounted(async () => {
+  // Initialize PIXI
   await app.init({
     resizeTo: window,
     backgroundColor: 0x000000,
@@ -141,37 +171,33 @@ onMounted(async () => {
   app.stage.addChild(container);
   container.scale.set(gridScale, gridScale);
   container.eventMode = 'static';
-  let firstMessage = false
-  socket.onmessage = (e) => {
-    const data = JSON.parse(e.data);
-    if (height != data.gameState.height || width != data.gameState.width) {
-      width = data.gameState.width;
-      height = data.gameState.height;
-      for (let i = 0; i <= width; i++) {
-        const line = new Graphics().rect(i * pixelSize, 0, 1, height * pixelSize).fill({ color: 0xffffff, alpha: 0.25 });
-        containerGrid.addChild(line);
-      }
-      for (let i = 0; i <= height; i++) {
-        const line = new Graphics().rect(0, i * pixelSize, width * pixelSize, 1).fill({ color: 0xffffff, alpha: 0.25 });
-        containerGrid.addChild(line);
-      }
-      bg.width = width * pixelSize
-      bg.height = height * pixelSize
-      container.addChildAt(containerGrid, 0);
-      container.addChildAt(bg, 1);
-      containerPosition = new Point(app.screen.width / 2 - ((width * pixelSize) * gridScale) / 2, app.screen.height / 2 - ((height * pixelSize) * gridScale) / 2);
-      container.position.set(containerPosition.x, containerPosition.y);
+
+  for (let i = 0; i <= width; i++) {
+    const line = new Graphics().rect(i * pixelSize, 0, 1, height * pixelSize).fill({ color: 0xffffff, alpha: 0.25 });
+    containerGrid.addChild(line);
+  }
+  for (let i = 0; i <= height; i++) {
+    const line = new Graphics().rect(0, i * pixelSize, width * pixelSize, 1).fill({ color: 0xffffff, alpha: 0.25 });
+    containerGrid.addChild(line);
+  }
+  bg.width = width * pixelSize
+  bg.height = height * pixelSize
+  container.addChildAt(containerGrid, 0);
+  container.addChildAt(bg, 1);
+  containerPosition = new Point(app.screen.width / 2 - ((width * pixelSize) * gridScale) / 2, app.screen.height / 2 - ((height * pixelSize) * gridScale) / 2);
+  container.position.set(containerPosition.x, containerPosition.y);
+
+  requestAnimationFrame(renderCells)
+
+  // Listen for messages
+  socket.onmessage = async (e) => {
+    try {
+      const decompressedData = snappy.uncompress(e.data);
+      const grid = await handleBlob(decompressedData);
+      updateCells(grid);
+    } catch (e) {
+      console.error('Error decompressing data:', e);
     }
-    if (data.gameState.playing) {
-      emit('update:gameRunning', true);
-    } else {
-      emit('update:gameRunning', false);
-    }
-    if (!firstMessage) {
-      firstMessage = true
-      requestAnimationFrame(renderCells)
-    }
-    updateCells(data.cells);
   };
 
   socket.onclose = () => {
@@ -182,13 +208,18 @@ onMounted(async () => {
     console.error('Error:', e);
   };
 
+  // Handle user input
   let isDragging = false;
   container.on('pointerdown', (e) => {
     isDragging = true;
     if (e.altKey) return;
     const x = Math.floor((e.global.x - container.position.x) / (pixelSize * gridScale));
     const y = Math.floor((e.global.y - container.position.y) / (pixelSize * gridScale));
-    socket.send(JSON.stringify({ "x": x, "y": y }));
+    for (let i = 0; i < 8; i++) {
+      for (let j = 0; j < 8; j++) {
+        socket.send(JSON.stringify({ "x": x + i, "y": y + j }));
+      }
+    }
   });
 
   container.on('pointerup', (e) => {
@@ -231,12 +262,6 @@ onMounted(async () => {
       randomGrid();
     } else if (e.key === 'c') {
       clearGrid();
-    } else if (e.key === 's') {
-      if (props.gameRunning) {
-        stopGame();
-      } else {
-        startGame();
-      }
     }
   });
 
