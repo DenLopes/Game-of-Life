@@ -93,7 +93,6 @@ const handleBlob = async (arrayBuffer) => {
   return bitArray;
 };
 
-// Event listeners remain the same
 const setupEventListeners = () => {
   socket.onmessage = async (e) => {
     try {
@@ -105,7 +104,6 @@ const setupEventListeners = () => {
   };
 };
 
-// Rest of the functions remain the same
 const renderLoop = () => {
   if (props.gameRunning) {
     draw({
