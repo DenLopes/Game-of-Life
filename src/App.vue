@@ -1,5 +1,5 @@
 <template>
-  <div class="absolute flex gap-4 p-2">
+  <!-- <div class="absolute flex gap-4 p-2">
     <div class="flex justify-center">
       <button @click="randomGrid"
         class="bg-black text-white font-bold p-2 rounded-md border border-solid border-white">Random
@@ -10,7 +10,7 @@
         class="bg-black text-white font-bold p-2 rounded-md border border-solid border-white">Clear
         Grid</button>
     </div>
-  </div>
+  </div> -->
   <Grid ref="gridRef" :game-running="isGameRunning" @update:gameRunning="(event) => (isGameRunning = event)" />
 </template>
 <script setup>

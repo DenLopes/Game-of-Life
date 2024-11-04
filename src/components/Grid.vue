@@ -1,43 +1,30 @@
 <template>
-  <div class="bg-black" ref="pixiContainer"></div>
+  <div ref="canvas_ref" @click="randomGrid"
+    :style="{ cursor: 'pointer', width: GRID_WIDTH * 12 + 'px', height: GRID_HEIGHT * 12 + 'px' }"></div>
 </template>
 
 <script setup>
-import { ref, onMounted, onUnmounted } from 'vue';
-import { Application, Sprite, Texture, Container, Graphics, Point } from 'pixi.js';
-import { AdvancedBloomFilter, CRTFilter, BulgePinchFilter } from 'pixi-filters';
+import { onMounted, onUnmounted, useTemplateRef } from 'vue';
 import snappy from 'snappyjs';
-
-// App classes
-const app = new Application();
-const container = new Container();
-const containerGrid = new Container();
+import REGL from 'regl';
+import fragmentShader from './shaders/shader.frag';
+import vertexShader from './shaders/shader.vert';
 
 // Refs
-const pixiContainer = ref(null);
+const canvas = useTemplateRef('canvas_ref');
 
 // Constants
-const PIXEL_SIZE = 10;
-const GRID_WIDTH = 256;
-const GRID_HEIGHT = 256;
+const CELL_SIZE = 4; // Each bit will be a 4x4 pixel block
+const GRID_WIDTH = 1024; // Original grid width
+const GRID_HEIGHT = 1024; // Original grid height
 const INITIAL_GRID_SCALE = 2;
 const MAX_GRID_SCALE = 4;
 const MIN_GRID_SCALE = 1;
 
 // Game variables
 let animationFrameId = null;
-let zoomLevel = INITIAL_GRID_SCALE;
 let targetPixelSize = INITIAL_GRID_SCALE;
-let containerPosition = { x: 0, y: 0 }
-let cellsPool = []
-let bitArrayBuffer = new Uint8Array(GRID_WIDTH * GRID_HEIGHT);
-let isDragging = false;
-let altKeyPressed = false;
-let lastPointerPosition = { x: 0, y: 0 };
-let isMultiTouch = false;
-let initialPinchDistance = 0;
-let initialZoomLevel = 0;
-let pointers = new Map();
+let regl, gameTexture, draw;
 
 const props = defineProps({
   scale: Number,
@@ -50,354 +37,134 @@ socket.onopen = () => console.log('Connected to server');
 socket.onclose = () => console.log('Connection closed');
 socket.onerror = (e) => console.error('WebSocket Error:', e);
 
-
-const bg = new Sprite(Texture.WHITE);
-bg.tint = 0x000000;
-bg.alpha = 0;
-bg.position.set(0, 0);
-bg.width = GRID_WIDTH * PIXEL_SIZE
-bg.height = GRID_HEIGHT * PIXEL_SIZE
-
-const createCell = (x, y) => {
-  const square = new Sprite(Texture.WHITE);
-  square.width = PIXEL_SIZE - 2;
-  square.height = PIXEL_SIZE - 2;
-  square.tint = 0xffffff;
-  square.visible = false;
-  square.position.set(x * PIXEL_SIZE + 2, y * PIXEL_SIZE + 2);
-  return square;
-};
-
-const cellIsInsideBoundingBox = (cell) => {
-  const { width: screenWidth, height: screenHeight } = app.screen;
-  const cellPosX = cell.x * zoomLevel + containerPosition.x;
-  const cellPosY = cell.y * zoomLevel + containerPosition.y;
-  return (cellPosX < screenWidth && cellPosY < screenHeight)
-}
-
-const renderCells = () => {
-  for (let i = 0; i < GRID_WIDTH * GRID_HEIGHT; i++) {
-    const cell = cellsPool[i];
-    const bit = bitArrayBuffer[i];
-    cell.renderable = bit !== 0;
-    if (cell.renderable) {
-      cell.visible = cellIsInsideBoundingBox(cell);
-    }
-  }
-};
-
-const animateResize = () => {
-  const prevZoomLevel = zoomLevel;
-  zoomLevel = lerp(zoomLevel, targetPixelSize, 0.2);
-
-  if (Math.abs(zoomLevel - targetPixelSize) > 0.01) {
-    container.scale.set(zoomLevel, zoomLevel);
-    
-    // Adjust container position to zoom towards the center of the pinch
-    const zoomCenter = isMultiTouch ? lastPointerPosition : { 
-      x: app.screen.width / 2, 
-      y: app.screen.height / 2 
-    };
-    
-    const zoomFactor = zoomLevel / prevZoomLevel;
-    containerPosition.x = zoomCenter.x - (zoomCenter.x - containerPosition.x) * zoomFactor;
-    containerPosition.y = zoomCenter.y - (zoomCenter.y - containerPosition.y) * zoomFactor;
-
-    updateContainerPosition(0, 0); // This will clamp the position within bounds
-    animationFrameId = requestAnimationFrame(animateResize);
-  } else {
-    animationFrameId = null;
-  }
-};
-
 const byteToBitArray = (byte) => {
   const bits = [];
   for (let i = 7; i >= 0; i--) {
-    bits.push((byte & (1 << i)) ? 1 : 0);
+    // Think in binary for this one
+    //     When i = 0:
+    // 1 << 0 = 00000001 (mask for position 0)
+    // byte   = 00000110
+    // & (AND)= 00000000 (result = 0, meaning bit 0 is NOT set)
+
+    // When i = 1:
+    // 1 << 1 = 00000010 (mask for position 1)
+    // byte   = 00000110
+    // & (AND)= 00000010 (result > 0, meaning bit 1 is SET)
+
+    // When i = 2:
+    // 1 << 2 = 00000100 (mask for position 2)
+    // byte   = 00000110
+    // & (AND)= 00000100 (result > 0, meaning bit 2 is SET)
+
+    // When i = 3:
+    // 1 << 3 = 00001000 (mask for position 3)
+    // byte   = 00000110
+    // & (AND)= 00000000 (result = 0, meaning bit 3 is NOT set)
+    // ... and so on
+    bits.push((byte & (1 << i)) ? 255 : 0);
   }
   return bits;
 };
 
-const updateContainerPostZoom = (prevZoomLevel) => {
-  const scaleDiff = zoomLevel - prevZoomLevel;
-  containerPosition.x -= ((GRID_WIDTH * PIXEL_SIZE) * scaleDiff) / 2;
-  containerPosition.y -= ((GRID_HEIGHT * PIXEL_SIZE) * scaleDiff) / 2;
-
-  containerPosition.x = Math.max(
-    Math.min(containerPosition.x, 0),
-    app.screen.width - (GRID_WIDTH * PIXEL_SIZE * zoomLevel)
-  );
-  containerPosition.y = Math.max(
-    Math.min(containerPosition.y, 0),
-    app.screen.height - (GRID_HEIGHT * PIXEL_SIZE * zoomLevel)
-  );
-
-  container.position.set(containerPosition.x, containerPosition.y);
-};
-
-const updateContainerPosition = (deltaX, deltaY) => {
-  containerPosition.x += deltaX;
-  containerPosition.y += deltaY;
-
-  containerPosition.x = Math.max(
-    Math.min(containerPosition.x, 0),
-    app.screen.width - (GRID_WIDTH * PIXEL_SIZE * zoomLevel)
-  );
-  containerPosition.y = Math.max(
-    Math.min(containerPosition.y, 0),
-    app.screen.height - (GRID_HEIGHT * PIXEL_SIZE * zoomLevel)
-  );
-
-  container.position.set(containerPosition.x, containerPosition.y);
-};
-
 const handleBlob = async (arrayBuffer) => {
   const byteArray = new Uint8Array(arrayBuffer);
-  const bitArray = [];
+  const bitArray = new Uint8Array(GRID_WIDTH * GRID_HEIGHT);
+  let index = 0;
+
   byteArray.forEach((byte) => {
-    bitArray.push(...byteToBitArray(byte));
+    const bits = byteToBitArray(byte);
+    bits.forEach(bit => {
+      if (index < bitArray.length) {
+        bitArray[index++] = bit;
+      }
+    });
   });
+
+  if (gameTexture) {
+    gameTexture.subimage({
+      data: bitArray,
+      width: GRID_WIDTH,
+      height: GRID_HEIGHT,
+      format: 'luminance',
+      type: 'uint8',
+    });
+  }
+
   return bitArray;
-}
+};
+
+// Event listeners remain the same
+const setupEventListeners = () => {
+  socket.onmessage = async (e) => {
+    try {
+      const decompressedData = snappy.uncompress(e.data);
+      await handleBlob(decompressedData);
+    } catch (e) {
+      console.error('Error decompressing data:', e);
+    }
+  };
+};
+
+// Rest of the functions remain the same
+const renderLoop = () => {
+  if (props.gameRunning) {
+    draw({
+      texture: gameTexture,
+    });
+  }
+  animationFrameId = requestAnimationFrame(renderLoop);
+};
+
+const cleanup = () => {
+  socket.close();
+  if (animationFrameId) {
+    cancelAnimationFrame(animationFrameId);
+  }
+};
 
 const randomGrid = () => {
   socket.send('random');
 };
 
-const clearGrid = () => {
-  socket.send('clear');
-};
-
-const lerp = (a, b, t) => {
-  return a + (b - a) * t;
-};
-
-// Lifecycle hooks
 onMounted(async () => {
-  await initializePixi();
   setupEventListeners();
+  regl = REGL(canvas.value);
+
+  const elements = [[0, 1, 2], [0, 2, 3]];
+  const positions = [[-1, -1], [1, -1], [1, 1], [-1, 1]];
+  const uvs = [[0, 0], [1, 0], [1, 1], [0, 1]];
+
+  gameTexture = regl.texture({
+    width: GRID_WIDTH,
+    height: GRID_HEIGHT,
+    format: 'luminance',
+    type: 'uint8',
+    mag: 'nearest',
+    min: 'nearest',
+    data: new Uint8Array(GRID_WIDTH * GRID_HEIGHT).fill(0),
+  });
+
+  draw = regl({
+    frag: fragmentShader,
+    vert: vertexShader,
+    attributes: {
+      position: regl.buffer(positions),
+      uv: regl.buffer(uvs),
+    },
+    elements: regl.elements(elements),
+    uniforms: {
+      texture: gameTexture,
+      cellSize: CELL_SIZE,
+      gridSize: [GRID_WIDTH, GRID_HEIGHT],
+    },
+  });
+
+  console.log('Texture created with dimensions:', GRID_WIDTH, 'x', GRID_HEIGHT);
+
+  renderLoop();
 });
 
 onUnmounted(() => {
   cleanup();
 });
-
-// Initialization
-const initializePixi = async () => {
-  await app.init({
-    resizeTo: window,
-    backgroundColor: 0x000000,
-    antialias: true,
-    webgpu: true,
-  });
-
-  app.stage.filters = [
-    new BulgePinchFilter({ radius: 1100, strength: 0.060, center: { x: 0.5, y: 0.5 } }),
-    new CRTFilter({ curvature: 4, lineWidth: 1, vignetting: 0.3, noise: 0.3, time: 1, noiseSize: 0.3, vignettingAlpha: 0.5, seed: 0 }),
-    new AdvancedBloomFilter({ threshold: 0.1, bloomScale: 1.7, brightness: 1.6, blur: 20, quality: 20 }),
-  ];
-
-  pixiContainer.value.appendChild(app.canvas);
-  app.stage.addChild(container);
-  container.scale.set(zoomLevel, zoomLevel);
-  container.eventMode = 'static';
-
-  setupGrid();
-  createCellsPool();
-  positionContainer();
-
-  app.ticker.add(renderCells);
-};
-
-const setupGrid = () => {
-  for (let i = 0; i <= GRID_WIDTH; i++) {
-    const line = new Graphics().rect(i * PIXEL_SIZE, 0, 2, GRID_HEIGHT * PIXEL_SIZE).fill({ color: 0x414342 });
-    containerGrid.addChild(line);
-  }
-  for (let i = 0; i <= GRID_HEIGHT; i++) {
-    const line = new Graphics().rect(0, i * PIXEL_SIZE, GRID_WIDTH * PIXEL_SIZE, 2).fill({ color: 0x414342 });
-    containerGrid.addChild(line);
-  }
-  container.addChildAt(containerGrid, 0);
-  container.addChildAt(bg, 1);
-};
-
-const createCellsPool = () => {
-  let x = 0
-  let y = 0
-  for (let i = 0; i < GRID_WIDTH * GRID_HEIGHT; i++) {
-    const cell = createCell(x, y);
-    container.addChild(cell);
-    cellsPool.push(cell)
-    // Increment x, and reset x and increment y when hitting the width limit
-    if (++x === GRID_WIDTH) {
-      x = 0;
-      y++;
-    }
-  }
-};
-
-const positionContainer = () => {
-  containerPosition = {
-    x: app.screen.width / 2 - ((GRID_WIDTH * PIXEL_SIZE) * zoomLevel) / 2,
-    y: app.screen.height / 2 - ((GRID_HEIGHT * PIXEL_SIZE) * zoomLevel) / 2
-  };
-  container.position.set(containerPosition.x, containerPosition.y);
-};
-
-// Event listeners
-const setupEventListeners = () => {
-  socket.onmessage = async (e) => {
-    try {
-      const decompressedData = snappy.uncompress(e.data);
-      bitArrayBuffer = await handleBlob(decompressedData);
-    } catch (e) {
-      console.error('Error decompressing data:', e);
-    }
-  };
-
-  container.on('pointerdown', handlePointerDown);
-  container.on('pointermove', handlePointerMove);
-  container.on('pointerup', handlePointerUp);
-  container.on('pointerupoutside', handlePointerUp);
-  container.on('pointercancel', handlePointerUp);
-
-  window.addEventListener('wheel', handleWheel);
-  window.addEventListener('resize', handleResize);
-  window.addEventListener('keydown', handleKeyDown);
-  window.addEventListener('keyup', handleKeyUp);
-};
-
-
-const handlePointerDown = (e) => {
-  pointers.set(e.pointerId, { x: e.global.x, y: e.global.y });
-
-  if (pointers.size === 2) {
-    isMultiTouch = true;
-    const points = Array.from(pointers.values());
-    lastPointerPosition = calculateCenter(points);
-    initialPinchDistance = calculateDistance(points[0], points[1]);
-    initialZoomLevel = zoomLevel;
-  } else if (pointers.size === 1 && !altKeyPressed) {
-    const { x, y } = calculateGridPosition(e.global);
-    for (let i = 0; i < 8; i++) {
-      for (let j = 0; j < 8; j++) {
-        socket.send(JSON.stringify({ "x": x + i, "y": y + j }));
-      }
-    }
-  }
-
-  isDragging = true;
-  lastPointerPosition = { x: e.global.x, y: e.global.y };
-};
-
-const handlePointerMove = (e) => {
-  if (!isDragging) return;
-
-  const currentPosition = { x: e.global.x, y: e.global.y };
-  pointers.set(e.pointerId, currentPosition);
-
-  if (isMultiTouch && pointers.size === 2) {
-    const points = Array.from(pointers.values());
-    const center = calculateCenter(points);
-    const currentPinchDistance = calculateDistance(points[0], points[1]);
-
-    // Handle zooming
-    const zoomDelta = currentPinchDistance / initialPinchDistance;
-    targetPixelSize = Math.max(MIN_GRID_SCALE, Math.min(MAX_GRID_SCALE, initialZoomLevel * zoomDelta));
-
-    // Handle panning
-    const deltaX = center.x - lastPointerPosition.x;
-    const deltaY = center.y - lastPointerPosition.y;
-
-    updateContainerPosition(deltaX, deltaY);
-    lastPointerPosition = center;
-
-    if (!animationFrameId) {
-      animationFrameId = requestAnimationFrame(animateResize);
-    }
-  } else if (pointers.size === 1 && altKeyPressed) {
-    const deltaX = currentPosition.x - lastPointerPosition.x;
-    const deltaY = currentPosition.y - lastPointerPosition.y;
-
-    updateContainerPosition(deltaX, deltaY);
-    lastPointerPosition = currentPosition;
-  } else if (pointers.size === 1 && !altKeyPressed) {
-    const { x, y } = calculateGridPosition(currentPosition);
-    socket.send(JSON.stringify({ "x": x, "y": y }));
-  }
-};
-
-const handlePointerUp = (e) => {
-  pointers.delete(e.pointerId);
-  if (pointers.size < 2) {
-    isMultiTouch = false;
-    initialPinchDistance = 0;
-    initialZoomLevel = zoomLevel;
-  }
-  if (pointers.size === 0) {
-    isDragging = false;
-  }
-};
-
-const calculateDistance = (point1, point2) => {
-  const dx = point1.x - point2.x;
-  const dy = point1.y - point2.y;
-  return Math.sqrt(dx * dx + dy * dy);
-};
-
-const calculateCenter = (points) => {
-  const sum = points.reduce((acc, point) => ({
-    x: acc.x + point.x,
-    y: acc.y + point.y
-  }), { x: 0, y: 0 });
-
-  return {
-    x: sum.x / points.length,
-    y: sum.y / points.length
-  };
-};
-
-const calculateGridPosition = (point) => {
-  return {
-    x: Math.floor((point.x - containerPosition.x) / (PIXEL_SIZE * zoomLevel)),
-    y: Math.floor((point.y - containerPosition.y) / (PIXEL_SIZE * zoomLevel))
-  };
-};
-
-const handleWheel = (e) => {
-  targetPixelSize = Math.max(MIN_GRID_SCALE, Math.min(MAX_GRID_SCALE, zoomLevel + (e.deltaY < 0 ? 0.1 : -0.1)));
-  if (!animationFrameId) {
-    animationFrameId = requestAnimationFrame(animateResize);
-  }
-};
-
-const handleResize = () => {
-  positionContainer();
-};
-
-const handleKeyDown = (e) => {
-  console.log(e.key)
-  if (e.key === 'r') randomGrid();
-  else if (e.key === 'c') clearGrid();
-  else if (e.key == 'Alt') altKeyPressed = true
-};
-
-const handleKeyUp = (e) => {
-  if (e.key == 'Alt') {
-    altKeyPressed = false
-  }
-}
-
-// Cleanup
-const cleanup = () => {
-  app.destroy();
-  window.removeEventListener('wheel', handleWheel);
-  window.removeEventListener('resize', handleResize);
-  window.removeEventListener('keydown', handleKeyDown);
-  window.removeEventListener('mousemove', handleMouseMove);
-  cancelAnimationFrame(animationFrameId);
-};
-
-defineExpose({ randomGrid, clearGrid });
 </script>
